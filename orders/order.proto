@@ -1,0 +1,64 @@
+syntax = "proto3";
+
+package book_ordering_system;
+
+service OrderService {
+    // Create a new book order
+    rpc CreateOrder(CreateOrderRequest) returns (CreateOrderResponse) {}
+
+    // Retrieve a specific book order
+    rpc GetOrder(GetOrderRequest) returns (GetOrderResponse) {}
+
+    // Update an existing book order
+    rpc UpdateOrder(UpdateOrderRequest) returns (UpdateOrderResponse) {}
+
+    // Delete a book order
+    rpc DeleteOrder(DeleteOrderRequest) returns (DeleteOrderResponse) {}
+
+    // List all book orders
+    rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse) {}
+}
+
+message CreateOrderRequest {
+    string customer_name = 1;
+    string book_title = 2;
+    int32 quantity = 3;
+    float price = 4;
+}
+
+message CreateOrderResponse {
+    string order_id = 1;
+}
+
+message GetOrderRequest {
+    string order_id = 1;
+}
+
+message GetOrderResponse {
+    string customer_name = 1;
+    string book_title = 2;
+    int32 quantity = 3;
+    float price = 4;
+}
+
+message UpdateOrderRequest {
+    string order_id = 1;
+    string customer_name = 2;
+    string book_title = 3;
+    int32 quantity = 4;
+    float price = 5;
+}
+
+message UpdateOrderResponse {}
+
+message DeleteOrderRequest {
+    string order_id = 1;
+}
+
+message DeleteOrderResponse {}
+
+message ListOrdersRequest {}
+
+message ListOrdersResponse {
+    repeated GetOrderResponse orders = 1;
+}
