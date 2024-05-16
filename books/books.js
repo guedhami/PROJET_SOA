@@ -109,7 +109,28 @@ app.delete("/book/:id", (req, res) => {
       }
     });
 });
-// Update Book by id
-app.put("/book/:id",(req,res)=>{
-  Book.findByIdAndUpdate(req.params.id,)
-})
+// Update Book by ID
+app.put("/book/:id", (req, res) => {
+  const updatedBook = {
+    title: req.body.title,
+    author: req.body.author,
+    description: req.body.description,
+    pages: req.body.pages,
+    category: req.body.category,
+    available: req.body.available,
+  };
+
+  Book.findByIdAndUpdate(req.params.id, updatedBook, { new: true })
+    .then((book) => {
+      if (book) {
+        res.json(book);
+      } else {
+        res.sendStatus(404);
+      }
+    })
+    .catch((err) => {
+      if (err) {
+        res.status(500).send("Failed to update book");
+      }
+    });
+});
