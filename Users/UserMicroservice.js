@@ -1,8 +1,7 @@
 const { ApolloServer } = require('apollo-server');
 const mongoose = require('mongoose');
 
-
-//Kafka:
+// Kafka:
 const { connectProducer, sendMessage } = require('./kafkaProducer');
 const { consumeMessages } = require('./kafkaConsumer');
 

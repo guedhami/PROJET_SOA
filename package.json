@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "server": "node books/books.js && node Users/index.js &&  node orders/order.js  "
+    "server": "node books/books.js && node Users/apiGateway.js && node Users/UserMicroservice.js  &&  node orders/order.js  "
   },
   "author": "",
   "license": "ISC",
