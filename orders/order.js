@@ -1,135 +1,76 @@
-const protobuf = require('protobufjs');
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
-
-
-// Kafka:
-const { connectProducer, sendMessage } = require('./kafkaProducer');
-const { consumeMessages } = require('./kafkaConsumer');
-
-connectProducer().then(() => {
-  console.log('Kafka Producer connected successfully');
-}).catch(err => {
-  console.error('Failed to connect Kafka Producer:', err);
-});
-
-consumeMessages('book-topic').then(() => {
-  console.log('Kafka Consumer is running');
-}).catch(err => {
-  console.error('Failed to start Kafka Consumer:', err);
-});
-
+const path = require('path');
 
 // Load the protobuf definition from the order.proto file
-const orderProtoPath = 'C:\\Users\\ASUS\\Desktop\\SOA\\Projet SOA\\orders\\order.proto';
-const packageDefinition = protoLoader.loadSync(orderProtoPath);
+const orderProtoPath = path.resolve(__dirname, './order.proto');
+const packageDefinition = protoLoader.loadSync(orderProtoPath, {
+  keepCase: true,
+  longs: String,
+  enums: String,
+  defaults: true,
+  oneofs: true
+});
+const orderProto = grpc.loadPackageDefinition(packageDefinition).book_ordering_system;
 
-// Get the OrderService definition from the loaded protobuf
-const OrderService = grpc.loadPackageDefinition(packageDefinition).book_ordering_system.OrderService;
+// gRPC Server Methods
+const orders = {};  // In-memory storage for orders
+let orderIdCounter = 1;
 
-// Create a client for the OrderService
-const client = new OrderService('localhost:50051', grpc.credentials.createInsecure());
-
-// Function to create a new order
-function createOrder(customerName, bookTitle, quantity, price) {
-  const request = {
-    customer_name: customerName,
-    book_title: bookTitle,
-    quantity: quantity,
-    price: price,
+function createOrder(call, callback) {
+  const orderId = orderIdCounter++;
+  const order = {
+    order_id: String(orderId),
+    User_name: call.request.User_name,
+    book_title: call.request.book_title,
+    quantity: call.request.quantity,
+    price: call.request.price
   };
-
-  client.CreateOrder(request, (error, response) => {
-    if (error) {
-      console.error('Error creating order:', error.message);
-      return;
-    }
-
-    console.log('Order created successfully. Order ID:', response.order_id);
-  });
+  orders[orderId] = order;
+  console.log('Order created:', order);  // Log the created order
+  callback(null, { order_id: order.order_id });
 }
 
-// Function to retrieve a specific order
-function getOrder(orderId) {
-  const request = {
-    order_id: orderId,
-  };
-
-  client.GetOrder(request, (error, response) => {
-    if (error) {
-      console.error('Error retrieving order:', error.message);
-      return;
-    }
-
-    console.log('Order retrieved successfully:');
-    console.log('Customer Name:', response.customer_name);
-    console.log('Book Title:', response.book_title);
-    console.log('Quantity:', response.quantity);
-    console.log('Price:', response.price);
-  });
+function getOrder(call, callback) {
+  const order = orders[call.request.order_id];
+  if (order) {
+    callback(null, order);
+  } else {
+    callback({ code: grpc.status.NOT_FOUND, message: 'Order not found' });
+  }
 }
 
-// Function to update an existing order
-function updateOrder(orderId, customerName, bookTitle, quantity, price) {
-  const request = {
-    order_id: orderId,
-    customer_name: customerName,
-    book_title: bookTitle,
-    quantity: quantity,
-    price: price,
-  };
-
-  client.UpdateOrder(request, (error, response) => {
-    if (error) {
-      console.error('Error updating order:', error.message);
-      return;
-    }
-
-    console.log('Order updated successfully.');
-  });
+function updateOrder(call, callback) {
+  const order = orders[call.request.order_id];
+  if (order) {
+    order.User_name = call.request.User_name;
+    order.book_title = call.request.book_title;
+    order.quantity = call.request.quantity;
+    order.price = call.request.price;
+    console.log('Order updated:', order);  // Log the updated order
+    callback(null, {});
+  } else {
+    callback({ code: grpc.status.NOT_FOUND, message: 'Order not found' });
+  }
 }
 
-// Function to delete an order
-function deleteOrder(orderId) {
-  const request = {
-    order_id: orderId,
-  };
-
-  client.DeleteOrder(request, (error, response) => {
-    if (error) {
-      console.error('Error deleting order:', error.message);
-      return;
-    }
-
-    console.log('Order deleted successfully.');
-  });
+function deleteOrder(call, callback) {
+  if (orders[call.request.order_id]) {
+    delete orders[call.request.order_id];
+    console.log('Order deleted:', call.request.order_id);  // Log the deleted order ID
+    callback(null, {});
+  } else {
+    callback({ code: grpc.status.NOT_FOUND, message: 'Order not found' });
+  }
 }
 
-// Function to list all orders
-function listOrders() {
-  const request = {};
-
-  client.ListOrders(request, (error, response) => {
-    if (error) {
-      console.error('Error listing orders:', error.message);
-      return;
-    }
-
-    console.log('List of orders:');
-    response.orders.forEach((order) => {
-      console.log('Order ID:', order.order_id);
-      console.log('Customer Name:', order.customer_name);
-      console.log('Book Title:', order.book_title);
-      console.log('Quantity:', order.quantity);
-      console.log('Price:', order.price);
-      console.log('-------------------------');
-    });
-  });
+function listOrders(call, callback) {
+  callback(null, { orders: Object.values(orders) });
 }
 
-// Implement the OrderService RPC methods
+// gRPC Server Setup
 const server = new grpc.Server();
-server.addService(OrderService.service, {
+server.addService(orderProto.OrderService.service, {
   CreateOrder: createOrder,
   GetOrder: getOrder,
   UpdateOrder: updateOrder,
@@ -137,7 +78,6 @@ server.addService(OrderService.service, {
   ListOrders: listOrders
 });
 
-// Start the gRPC server and listen on port 50051
 server.bindAsync('localhost:50051', grpc.ServerCredentials.createInsecure(), (err, port) => {
   if (err) {
     console.error('Failed to start server:', err);
@@ -146,3 +86,50 @@ server.bindAsync('localhost:50051', grpc.ServerCredentials.createInsecure(), (er
     server.start();
   }
 });
+
+// gRPC Client Setup
+const client = new orderProto.OrderService('localhost:50051', grpc.credentials.createInsecure());
+console.log("gRPC client created successfully");
+
+// gRPC Client Methods
+function createOrderClient(User_name, bookTitle, quantity, price) {
+  const request = {
+    User_name: User_name,
+    book_title: bookTitle,
+    quantity: quantity,
+    price: price
+  };
+  client.CreateOrder(request, (error, response) => {
+    if (error) {
+      console.error('Error creating order:', error.message);
+    } else {
+      console.log('Order created successfully. Order ID:', response.order_id);
+    }
+  });
+}
+
+function getOrderClient(orderId) {
+  const request = { order_id: orderId };
+  client.GetOrder(request, (error, response) => {
+    if (error) {
+      console.error('Error retrieving order:', error.message);
+    } else {
+      console.log('Order retrieved successfully:', response);
+    }
+  });
+}
+
+function listOrdersClient() {
+  const request = {};
+  client.ListOrders(request, (error, response) => {
+    if (error) {
+      console.error('Error listing orders:', error.message);
+    } else {
+      console.log('List of orders:', response.orders);
+      response.orders.forEach(order => {
+        console.log(order);
+      });
+    }
+  });
+}
+
